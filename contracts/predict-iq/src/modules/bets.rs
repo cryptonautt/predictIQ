@@ -237,3 +237,18 @@ pub fn withdraw_refund(
 
     Ok(refund_amount)
 }
+
+pub fn get_minimum_bet_amount(e: &Env) -> i128 {
+    e.storage()
+        .persistent()
+        .get(&crate::types::ConfigKey::MinimumBetAmount)
+        .unwrap_or(1_000_000) // Default: 0.1 XLM (1,000,000 stroops) or equivalent
+}
+
+pub fn set_minimum_bet_amount(e: &Env, amount: i128) -> Result<(), ErrorCode> {
+    crate::modules::admin::require_admin(e)?;
+    e.storage()
+        .persistent()
+        .set(&crate::types::ConfigKey::MinimumBetAmount, &amount);
+    Ok(())
+}
