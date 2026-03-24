@@ -1,8 +1,17 @@
 use crate::errors::ErrorCode;
 use crate::types::{
     ConfigKey, Guardian, PendingUpgrade, MAJORITY_THRESHOLD_PERCENT, TIMELOCK_DURATION,
+    GOV_TTL_LOW_THRESHOLD, GOV_TTL_HIGH_THRESHOLD,
 };
 use soroban_sdk::{Address, Env, String, Vec};
+
+/// Extend TTL for a governance key so it never expires during long inactivity.
+/// Called after every write to a governance storage slot.
+fn bump_gov_ttl(e: &Env, key: &ConfigKey) {
+    e.storage()
+        .persistent()
+        .extend_ttl(key, GOV_TTL_LOW_THRESHOLD, GOV_TTL_HIGH_THRESHOLD);
+}
 
 /// Initialize the GuardianSet with a list of guardians and their voting power.
 /// Only callable by admin during contract initialization.
@@ -18,6 +27,7 @@ pub fn initialize_guardians(e: &Env, guardians: Vec<Guardian>) -> Result<(), Err
     e.storage()
         .persistent()
         .set(&ConfigKey::GuardianSet, &guardians);
+    bump_gov_ttl(e, &ConfigKey::GuardianSet);
     Ok(())
 }
 
@@ -46,6 +56,7 @@ pub fn add_guardian(e: &Env, guardian: Guardian) -> Result<(), ErrorCode> {
     e.storage()
         .persistent()
         .set(&ConfigKey::GuardianSet, &guardians);
+    bump_gov_ttl(e, &ConfigKey::GuardianSet);
     Ok(())
 }
 
@@ -72,6 +83,7 @@ pub fn remove_guardian(e: &Env, address: Address) -> Result<(), ErrorCode> {
     e.storage()
         .persistent()
         .set(&ConfigKey::GuardianSet, &new_guardians);
+    bump_gov_ttl(e, &ConfigKey::GuardianSet);
     Ok(())
 }
 
@@ -103,6 +115,7 @@ pub fn initiate_upgrade(e: &Env, wasm_hash: String) -> Result<(), ErrorCode> {
     e.storage()
         .persistent()
         .set(&ConfigKey::PendingUpgrade, &pending_upgrade);
+    bump_gov_ttl(e, &ConfigKey::PendingUpgrade);
     Ok(())
 }
 
@@ -155,6 +168,7 @@ pub fn vote_for_upgrade(e: &Env, voter: Address, vote_for: bool) -> Result<bool,
     e.storage()
         .persistent()
         .set(&ConfigKey::PendingUpgrade, &pending_upgrade);
+    bump_gov_ttl(e, &ConfigKey::PendingUpgrade);
     Ok(true)
 }
 

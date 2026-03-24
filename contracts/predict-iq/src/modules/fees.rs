@@ -1,13 +1,19 @@
 use crate::errors::ErrorCode;
 use crate::modules::admin;
-use crate::types::{ConfigKey, MarketTier};
-use soroban_sdk::{contracttype, Address, Env};
+use crate::types::{ConfigKey, MarketTier, GOV_TTL_LOW_THRESHOLD, GOV_TTL_HIGH_THRESHOLD};
+use soroban_sdk::{contracttype, Address, Env, Symbol};
 
 #[contracttype]
 pub enum DataKey {
     TotalFeesCollected,
     FeeRevenue(Address),      // token_address -> amount
     ReferrerBalance(Address), // referrer_address -> amount
+}
+
+fn bump_config_ttl(e: &Env, key: &ConfigKey) {
+    e.storage()
+        .persistent()
+        .extend_ttl(key, GOV_TTL_LOW_THRESHOLD, GOV_TTL_HIGH_THRESHOLD);
 }
 
 pub fn get_base_fee(e: &Env) -> i128 {
@@ -20,6 +26,7 @@ pub fn get_base_fee(e: &Env) -> i128 {
 pub fn set_base_fee(e: &Env, amount: i128) -> Result<(), ErrorCode> {
     admin::require_admin(e)?;
     e.storage().persistent().set(&ConfigKey::BaseFee, &amount);
+    bump_config_ttl(e, &ConfigKey::BaseFee);
     Ok(())
 }
 

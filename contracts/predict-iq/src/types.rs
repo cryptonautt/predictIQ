@@ -150,3 +150,9 @@ pub const MAJORITY_THRESHOLD_PERCENT: u32 = 51; // 51% for majority
 pub const TTL_LOW_THRESHOLD: u32 = 17_280; // ~1 day (86400 seconds / 5)
 pub const TTL_HIGH_THRESHOLD: u32 = 518_400; // ~30 days (2592000 seconds / 5)
 pub const PRUNE_GRACE_PERIOD: u64 = 2_592_000; // 30 days in seconds
+
+/// Governance TTL constants — much longer than market data because governance
+/// processes (upgrades, guardian votes) can span months of inactivity.
+/// ~90 days expressed in ledgers (~5 seconds per ledger).
+pub const GOV_TTL_LOW_THRESHOLD: u32 = 1_555_200;  // ~90 days
+pub const GOV_TTL_HIGH_THRESHOLD: u32 = 3_110_400; // ~180 days
