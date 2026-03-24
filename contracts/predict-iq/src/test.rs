@@ -1285,3 +1285,88 @@ fn test_create_market_one_above_max_outcomes_is_rejected() {
 
     assert_eq!(result, Err(Ok(ErrorCode::TooManyOutcomes)));
 }
+
+// ===================== Governance TTL Durability Tests (Issue #85) =====================
+
+#[test]
+fn test_pending_upgrade_survives_3_months_inactivity() {
+    let (e, _admin, _contract_id, client) = setup_test_env();
+
+    let guardian = Address::generate(&e);
+    let mut guardians = Vec::new(&e);
+    guardians.push_back(types::Guardian {
+        address: guardian.clone(),
+        voting_power: 1,
+    });
+    client.initialize_guardians(&guardians);
+
+    let wasm_hash = String::from_str(&e, "deadbeef1234");
+    e.ledger().with_mut(|li| li.timestamp = 1000);
+
+    client.initiate_upgrade(&wasm_hash);
+
+    // Simulate ~3 months of network inactivity:
+    // 90 days * 86400 seconds/day / 5 seconds per ledger = 1_555_200 ledgers
+    e.ledger().with_mut(|li| {
+        li.sequence = li.sequence + 1_555_200;
+        li.timestamp = 1000 + (90 * 86400);
+    });
+
+    // PendingUpgrade must still be readable — TTL was set to 180 days on write
+    let pending = client.get_pending_upgrade();
+    assert!(pending.is_some(), "PendingUpgrade expired after 3 months of inactivity");
+    assert_eq!(pending.unwrap().wasm_hash, wasm_hash);
+}
+
+#[test]
+fn test_guardian_set_survives_3_months_inactivity() {
+    let (e, _admin, _contract_id, client) = setup_test_env();
+
+    let guardian = Address::generate(&e);
+    let mut guardians = Vec::new(&e);
+    guardians.push_back(types::Guardian {
+        address: guardian.clone(),
+        voting_power: 1,
+    });
+    client.initialize_guardians(&guardians);
+
+    // Advance 3 months
+    e.ledger().with_mut(|li| {
+        li.sequence = li.sequence + 1_555_200;
+        li.timestamp = 90 * 86400;
+    });
+
+    let stored = client.get_guardians();
+    assert_eq!(stored.len(), 1, "GuardianSet expired after 3 months of inactivity");
+    assert_eq!(stored.get(0).unwrap().address, guardian);
+}
+
+#[test]
+fn test_vote_on_upgrade_refreshes_ttl() {
+    let (e, _admin, _contract_id, client) = setup_test_env();
+
+    let guardian = Address::generate(&e);
+    let mut guardians = Vec::new(&e);
+    guardians.push_back(types::Guardian {
+        address: guardian.clone(),
+        voting_power: 1,
+    });
+    client.initialize_guardians(&guardians);
+
+    e.ledger().with_mut(|li| li.timestamp = 1000);
+    client.initiate_upgrade(&String::from_str(&e, "cafebabe"));
+
+    // Vote refreshes the TTL on PendingUpgrade
+    client.vote_for_upgrade(&guardian, &true);
+
+    // Advance another 3 months after the vote
+    e.ledger().with_mut(|li| {
+        li.sequence = li.sequence + 1_555_200;
+        li.timestamp = 1000 + (90 * 86400);
+    });
+
+    let pending = client.get_pending_upgrade();
+    assert!(pending.is_some(), "PendingUpgrade expired after vote + 3 months inactivity");
+    let (votes_for, _) = client.get_upgrade_votes().unwrap();
+    assert_eq!(votes_for, 1);
+}

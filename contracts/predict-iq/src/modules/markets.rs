@@ -174,15 +174,9 @@ pub fn set_payout_mode(
 }
 
 // Gas-optimized market count for specific outcome
-pub fn count_bets_for_outcome(e: &Env, market_id: u64, _outcome: u32) -> u32 {
-    // This would need a separate index in production
-    // For now, return estimate based on storage patterns
-    let key = crate::modules::bets::DataKey::Bet(market_id, e.current_contract_address());
-    if e.storage().persistent().has(&key) {
-        1
-    } else {
-        0
-    }
+pub fn count_bets_for_outcome(_e: &Env, _market_id: u64, _outcome: u32) -> u32 {
+    // Placeholder — a production implementation would maintain a separate index.
+    0
 }
 
 pub fn get_creator_reputation(e: &Env, creator: &Address) -> CreatorReputation {
@@ -216,6 +210,9 @@ pub fn set_creation_deposit(e: &Env, amount: i128) -> Result<(), ErrorCode> {
     e.storage()
         .persistent()
         .set(&ConfigKey::CreationDeposit, &amount);
+    e.storage()
+        .persistent()
+        .extend_ttl(&ConfigKey::CreationDeposit, crate::types::GOV_TTL_LOW_THRESHOLD, crate::types::GOV_TTL_HIGH_THRESHOLD);
     Ok(())
 }
 
