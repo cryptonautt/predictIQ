@@ -33,18 +33,18 @@ pub fn validate_price(e: &Env, price: &PythPrice, config: &OracleConfig) -> Resu
     let current_time = e.ledger().timestamp(); // u64
     let age = current_time.saturating_sub(price.publish_time);
 
-    let max_staleness = config.max_staleness_seconds.unwrap_or(3600);
+    let max_staleness = config.max_staleness_seconds;
     if age > max_staleness {
         return Err(ErrorCode::StalePrice);
     }
 
     // Check confidence: conf should be < max_confidence_bps% of price
     let price_abs = if price.price < 0 {
-        -price.price
+        (-price.price) as u64
     } else {
-        price.price
-    } as u64;
-    let max_conf = (price_abs * config.max_confidence_bps as u64) / 10000;
+        price.price as u64
+    };
+    let max_conf = (price_abs * config.max_confidence_bps) / 10000;
 
     if price.conf > max_conf {
         return Err(ErrorCode::ConfidenceTooLow);
