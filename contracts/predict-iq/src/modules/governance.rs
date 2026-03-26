@@ -60,30 +60,102 @@ pub fn add_guardian(e: &Env, guardian: Guardian) -> Result<(), ErrorCode> {
     Ok(())
 }
 
-/// Remove a guardian from the set. Only callable by admin.
+/// Remove a guardian from the set. Requires majority consensus from other guardians.
 pub fn remove_guardian(e: &Env, address: Address) -> Result<(), ErrorCode> {
     crate::modules::admin::require_admin(e)?;
 
     let guardians = get_guardians(e);
-    let mut new_guardians: Vec<Guardian> = Vec::new(e);
-
+    
+    // Check if guardian exists
     let mut found = false;
     for g in guardians.iter() {
-        if g.address != address {
-            new_guardians.push_back(g.clone());
-        } else {
+        if g.address == address {
             found = true;
+            break;
         }
     }
-
+    
     if !found {
         return Err(ErrorCode::GuardianNotSet);
     }
 
+    // Initiate removal proposal
+    let pending_removal = crate::types::PendingGuardianRemoval {
+        target_guardian: address.clone(),
+        initiated_at: e.ledger().timestamp(),
+        votes_for: Vec::new(e),
+    };
+
     e.storage()
         .persistent()
-        .set(&ConfigKey::GuardianSet, &new_guardians);
-    bump_gov_ttl(e, &ConfigKey::GuardianSet);
+        .set(&ConfigKey::PendingGuardianRemoval, &pending_removal);
+    bump_gov_ttl(e, &ConfigKey::PendingGuardianRemoval);
+    Ok(())
+}
+
+/// Vote on a pending guardian removal. Requires majority of other guardians.
+pub fn vote_on_guardian_removal(e: &Env, voter: Address, approve: bool) -> Result<(), ErrorCode> {
+    let guardians = get_guardians(e);
+    
+    // Verify voter is a guardian
+    let mut voter_is_guardian = false;
+    for g in guardians.iter() {
+        if g.address == voter {
+            voter_is_guardian = true;
+            break;
+        }
+    }
+    
+    if !voter_is_guardian {
+        return Err(ErrorCode::NotAuthorized);
+    }
+
+    let mut pending_removal = e.storage()
+        .persistent()
+        .get::<_, crate::types::PendingGuardianRemoval>(&ConfigKey::PendingGuardianRemoval)
+        .ok_or(ErrorCode::GuardianNotSet)?;
+
+    // Check if voter already voted
+    for v in pending_removal.votes_for.iter() {
+        if v == voter {
+            return Err(ErrorCode::AlreadyVotedOnUpgrade);
+        }
+    }
+
+    if approve {
+        pending_removal.votes_for.push_back(voter);
+    }
+
+    // Calculate if majority reached (excluding target guardian)
+    let other_guardians_count = guardians.len() as u32 - 1;
+    let votes_needed = (other_guardians_count * MAJORITY_THRESHOLD_PERCENT) / 100 + 1;
+    
+    if pending_removal.votes_for.len() as u32 >= votes_needed {
+        // Majority reached, execute removal
+        let mut new_guardians: Vec<Guardian> = Vec::new(e);
+        for g in guardians.iter() {
+            if g.address != pending_removal.target_guardian {
+                new_guardians.push_back(g.clone());
+            }
+        }
+
+        e.storage()
+            .persistent()
+            .set(&ConfigKey::GuardianSet, &new_guardians);
+        bump_gov_ttl(e, &ConfigKey::GuardianSet);
+        
+        // Clear pending removal
+        e.storage()
+            .persistent()
+            .remove(&ConfigKey::PendingGuardianRemoval);
+    } else {
+        // Update pending removal with new vote
+        e.storage()
+            .persistent()
+            .set(&ConfigKey::PendingGuardianRemoval, &pending_removal);
+        bump_gov_ttl(e, &ConfigKey::PendingGuardianRemoval);
+    }
+
     Ok(())
 }
 

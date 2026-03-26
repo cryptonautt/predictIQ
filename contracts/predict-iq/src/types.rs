@@ -118,6 +118,7 @@ pub enum ConfigKey {
     UpgradeVotes,
     GovernanceToken,
     MaxPushPayoutWinners,
+    PendingGuardianRemoval,
 }
 
 #[contracttype]
