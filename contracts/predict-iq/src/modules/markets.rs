@@ -51,7 +51,6 @@ pub fn create_market(
 
         // Also verify parent_outcome_idx is within parent's options range
         let parent_market = get_market(e, parent_id).ok_or(ErrorCode::MarketNotFound)?;
-        let parent_market = get_market(e, parent_id).ok_or(ErrorCode::MarketNotFound)?;
 
         // Validate parent_outcome_idx is within parent's options range
         if parent_outcome_idx >= parent_market.options.len() {

@@ -245,6 +245,10 @@ impl PredictIQ {
         crate::modules::circuit_breaker::unpause(&e)
     }
 
+    pub fn set_governance_token(e: Env, token: Address) -> Result<(), ErrorCode> {
+        crate::modules::admin::set_governance_token(&e, token)
+    }
+
     pub fn get_resolution_metrics(
         e: Env,
         market_id: u64,

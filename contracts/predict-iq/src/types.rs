@@ -89,12 +89,6 @@ pub struct LockedTokens {
 pub struct OracleConfig {
     pub oracle_address: Address,
     pub feed_id: String,
-    pub min_responses: u32,
-    pub max_staleness_seconds: u64,
-    pub max_confidence_bps: u64,
-    pub min_responses: Option<u32>,
-    pub max_staleness_seconds: u64,
-    pub max_confidence_bps: u64,
     pub min_responses: Option<u32>, // Optimized: None defaults to 1
     pub max_staleness_seconds: u64, // Max age of price data in seconds
     pub max_confidence_bps: u64,    // Max confidence interval in basis points

@@ -80,3 +80,11 @@ pub fn require_guardian(e: &Env) -> Result<(), ErrorCode> {
     guardian.require_auth();
     Ok(())
 }
+
+pub fn set_governance_token(e: &Env, token: Address) -> Result<(), ErrorCode> {
+    require_admin(e)?;
+    e.storage()
+        .instance()
+        .set(&ConfigKey::GovernanceToken, &token);
+    Ok(())
+}
