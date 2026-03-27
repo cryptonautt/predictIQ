@@ -263,3 +263,52 @@ fn test_creator_deposit_refunded_on_cancellation() {
     let second_attempt = client.try_withdraw_refund(&user1, &market_id);
     assert_eq!(second_attempt, Ok(Ok(0))); // no bet left, deposit already zeroed
 }
+
+/// Issue #52: Overflow-safe threshold check with astronomical voting weights.
+/// cancel_votes = i128::MAX / 5000 would overflow (cancel_votes * 10000) before the fix.
+#[test]
+fn test_cancel_vote_threshold_no_overflow() {
+    let (env, client, _admin, user1, _user2, token_address) = setup_test();
+
+    let oracle = Address::generate(&env);
+    let options = Vec::from_array(
+        &env,
+        [String::from_str(&env, "Yes"), String::from_str(&env, "No")],
+    );
+
+    let market_id = client.create_market(
+        &user1,
+        &String::from_str(&env, "Test Market"),
+        &options,
+        &(env.ledger().timestamp() + 1000),
+        &(env.ledger().timestamp() + 2000),
+        &crate::types::OracleConfig {
+            oracle_address: oracle,
+            feed_id: String::from_str(&env, "test"),
+            min_responses: 1,
+            max_staleness_seconds: 3600,
+            max_confidence_bps: 200,
+        },
+        &crate::types::MarketTier::Basic,
+        &token_address,
+        &0,
+        &0,
+    );
+
+    // Move to Disputed so cancel_market_vote is reachable
+    client.place_bet(&user1, &market_id, &0, &1000, &token_address, &None);
+    client.resolve_market(&market_id, &0);
+    client.file_dispute(&user1, &market_id);
+
+    // Cast cancel votes with a weight that would overflow (cancel_votes * 10000 > i128::MAX)
+    let huge_weight = i128::MAX / 5000; // * 10000 overflows without checked_mul
+    // u32::MAX is the sentinel outcome index for "cancel" votes
+    client.cast_vote(&user1, &market_id, &u32::MAX, &huge_weight);
+
+    // Should not panic; checked_mul returns None on overflow → InsufficientVotingWeight
+    let result = client.try_cancel_market_vote(&market_id);
+    // Either succeeds (if threshold met) or returns InsufficientVotingWeight — never panics
+    assert!(
+        result.is_ok() || result == Err(Ok(crate::errors::ErrorCode::InsufficientVotingWeight))
+    );
+}

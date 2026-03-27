@@ -44,7 +44,11 @@ pub fn cancel_market_vote(e: &Env, market_id: u64) -> Result<(), ErrorCode> {
         return Err(ErrorCode::InsufficientVotingWeight);
     }
 
-    let cancel_pct = (cancel_votes * 10000) / total_votes;
+    // Issue #52: Use checked_mul to prevent overflow with large voting weights.
+    let cancel_pct = cancel_votes
+        .checked_mul(10000)
+        .and_then(|n| n.checked_div(total_votes))
+        .ok_or(ErrorCode::InsufficientVotingWeight)?;
     if cancel_pct < FAILED_MARKET_THRESHOLD_BPS {
         return Err(ErrorCode::InsufficientVotingWeight);
     }
